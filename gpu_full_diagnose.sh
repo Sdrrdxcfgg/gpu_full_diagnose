@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # gpu_full_diagnose.sh
-# AMD + Wayland용 종합 그래픽 진단 스크립트 (개선버전)
+# AMD + Wayland용 종합 그래픽 진단 스크립트 (egrep 경고 수정 버전)
 # 실행: sudo ./gpu_full_diagnose.sh
 # 결과: ~/gpu_full_diagnose 폴더에 로그와 요약 파일 생성
 
@@ -16,7 +16,7 @@ mkdir -p "$OUTDIR"
 
 timestamp() { date +'%Y-%m-%d %H:%M:%S'; }
 
-echo "=== GPU Full Diagnose (Enhanced Version) ===" >> "$LOG"
+echo "=== GPU Full Diagnose (Fixed Version) ===" >> "$LOG"
 echo "생성 시간: $(timestamp)" >> "$LOG"
 echo "사용자: $(whoami)" >> "$LOG"
 echo "호스트: $(hostname)" >> "$LOG"
@@ -56,7 +56,7 @@ echo "" >> "$LOG"
 ###########################
 note "### 1) 시스템 및 GPU 정보 수집"
 echo "--- lspci -k (VGA/3D/Display)" >> "$LOG"
-lspci -nnk | grep -EA4 'VGA|3D|Display' >> "$LOG" 2>&1 || echo "(lspci 실패 또는 출력 없음)" >> "$LOG"
+lspci -nnk | grep -E -A4 'VGA|3D|Display' >> "$LOG" 2>&1 || echo "(lspci 실패 또는 출력 없음)" >> "$LOG"
 echo "" >> "$LOG"
 
 note "uname 및 커널"
@@ -66,7 +66,7 @@ cat /proc/cmdline >> "$LOG" 2>/dev/null || echo "(커맨드라인 읽기 실패)
 echo "" >> "$LOG"
 
 note "lsmod (amdgpu / radeon / drm 로드 여부)"
-lsmod | egrep 'amdgpu|radeon|drm' >> "$LOG" || echo "(관련 모듈 없음)" >> "$LOG"
+lsmod | grep -E 'amdgpu|radeon|drm' >> "$LOG" || echo "(관련 모듈 없음)" >> "$LOG"
 echo "" >> "$LOG"
 
 note "modinfo amdgpu (가능하면)"
@@ -115,7 +115,7 @@ echo "" >> "$LOG"
 ###########################
 note "### 3) journalctl & dmesg 검사 (GPU/DRM/Wayland/XWayland 등)"
 # 전체 부팅 로그에서 GPU/DRM/Wayland/Xorg 관련 키워드 필터
-journalctl -b --no-pager | egrep -i 'amdgpu|radeon|drm|gpu|hang|fail|error|segfault|XWayland|Xorg|gnome-shell|kwin_wayland|sway|weston|wayland|libinput|pipewire' > "${OUTDIR}/journal_keywords.log" || true
+journalctl -b --no-pager | grep -E -i 'amdgpu|radeon|drm|gpu|hang|fail|error|segfault|XWayland|Xorg|gnome-shell|kwin_wayland|sway|weston|wayland|libinput|pipewire' > "${OUTDIR}/journal_keywords.log" || true
 echo "Saved journal keyword matches to ${OUTDIR}/journal_keywords.log" >> "$LOG"
 
 # 최근 1시간 로그도 별도 저장
@@ -124,7 +124,7 @@ echo "Saved recent 1h journal to ${OUTDIR}/journal_recent.log" >> "$LOG"
 
 note "dmesg (커널 로그)에서 GPU/firmware/hang/oom 검사"
 dmesg > "${OUTDIR}/dmesg_full.log" 2>/dev/null || true
-dmesg | egrep -i 'amdgpu|radeon|firmware|GPU|hang|fault|oom|error|panic|call trace' > "${OUTDIR}/dmesg_keywords.log" || true
+dmesg | grep -E -i 'amdgpu|radeon|firmware|GPU|hang|fault|oom|error|panic|call trace' > "${OUTDIR}/dmesg_keywords.log" || true
 echo "Saved dmesg matches to ${OUTDIR}/dmesg_keywords.log" >> "$LOG"
 echo "" >> "$LOG"
 
@@ -133,14 +133,14 @@ echo "" >> "$LOG"
 ###########################
 note "### 4) Xorg / XWayland 검사"
 if [ -f /var/log/Xorg.0.log ]; then
-  grep -iE '(EE)|(WW)' /var/log/Xorg.0.log > "${OUTDIR}/Xorg_EE_WW.log" || true
+  grep -E -i '(EE)|(WW)' /var/log/Xorg.0.log > "${OUTDIR}/Xorg_EE_WW.log" || true
   echo "Saved /var/log/Xorg.0.log EE/WW to ${OUTDIR}/Xorg_EE_WW.log" >> "$LOG"
 fi
 
 # 사용자별 Xorg 로그도 확인
 for xlog in ~/.local/share/xorg/Xorg.*.log; do
   if [ -f "$xlog" ]; then
-    grep -iE '(EE)|(WW)' "$xlog" > "${OUTDIR}/user_Xorg_EE_WW.log" || true
+    grep -E -i '(EE)|(WW)' "$xlog" > "${OUTDIR}/user_Xorg_EE_WW.log" || true
     echo "Saved user Xorg log EE/WW to ${OUTDIR}/user_Xorg_EE_WW.log" >> "$LOG"
     break
   fi
@@ -152,11 +152,11 @@ echo "" >> "$LOG"
 ###########################
 note "### 5) Wayland / Compositor (gnome-shell, kwin_wayland, sway, weston 등) 검사"
 # 프로세스 확인
-ps aux | egrep 'gnome-shell|kwin_wayland|sway|weston|wayland|pipewire|wireplumber' | head -n 100 > "${OUTDIR}/compositor_procs.log" || true
+ps aux | grep -E 'gnome-shell|kwin_wayland|sway|weston|wayland|pipewire|wireplumber' | head -n 100 > "${OUTDIR}/compositor_procs.log" || true
 echo "Compositor processes -> ${OUTDIR}/compositor_procs.log" >> "$LOG"
 
 # journal에서 구체 검색
-journalctl -b --no-pager | egrep -i 'gnome-shell|kwin_wayland|kwin|sway|weston|xwayland|XWayland|pipewire|wireplumber' > "${OUTDIR}/compositor_journal.log" || true
+journalctl -b --no-pager | grep -E -i 'gnome-shell|kwin_wayland|kwin|sway|weston|xwayland|XWayland|pipewire|wireplumber' > "${OUTDIR}/compositor_journal.log" || true
 echo "Compositor journal matches -> ${OUTDIR}/compositor_journal.log" >> "$LOG"
 
 # Wayland 소켓 확인
@@ -221,8 +221,8 @@ echo "" >> "$LOG"
 ###########################
 note "### 8) 펌웨어 및 드라이버 로딩 검사"
 dmesg | grep -i firmware > "${OUTDIR}/firmware_msgs.log" || true
-dmesg | egrep -i 'amdgpu.*firmware|amdgpu.*failed|amdgpu.*error|amdgpu.*timeout' > "${OUTDIR}/amdgpu_dmesg.log" || true
-journalctl -b --no-pager | egrep -i 'amdgpu.*firmware|amdgpu.*failed|amdgpu.*error|amdgpu.*timeout' > "${OUTDIR}/amdgpu_journal.log" || true
+dmesg | grep -E -i 'amdgpu.*firmware|amdgpu.*failed|amdgpu.*error|amdgpu.*timeout' > "${OUTDIR}/amdgpu_dmesg.log" || true
+journalctl -b --no-pager | grep -E -i 'amdgpu.*firmware|amdgpu.*failed|amdgpu.*error|amdgpu.*timeout' > "${OUTDIR}/amdgpu_journal.log" || true
 
 # 펌웨어 파일 존재 확인
 echo "AMD 펌웨어 파일 상태:" >> "$LOG"
@@ -271,24 +271,26 @@ echo "" >> "$LOG"
 ###########################
 note "### 10) coredumpctl 및 프로세스 충돌 검사"
 if check_cmd coredumpctl systemd; then
-  coredumpctl list | head -n 100 > "${OUTDIR}/coredump_list_all.log" || true
-  coredumpctl list | egrep -i 'gnome-shell|kwin|sway|weston|Xwayland|Xorg|compositor|pipewire' > "${OUTDIR}/coredump_list.log" || true
+  coredumpctl list 2>/dev/null | head -n 100 > "${OUTDIR}/coredump_list_all.log" || echo "No coredumps found." > "${OUTDIR}/coredump_list_all.log"
+  coredumpctl list 2>/dev/null | grep -E -i 'gnome-shell|kwin|sway|weston|Xwayland|Xorg|compositor|pipewire' > "${OUTDIR}/coredump_list.log" || echo "No relevant coredumps found." > "${OUTDIR}/coredump_list.log"
   echo "Saved coredump list -> ${OUTDIR}/coredump_list.log" >> "$LOG"
   
   # 최근 코어덤프 상세 정보 (최대 3개)
-  coredumpctl list --no-pager | egrep -i 'gnome-shell|kwin|sway|weston|Xwayland|Xorg' | head -n 3 | while read line; do
+  if coredumpctl list 2>/dev/null | grep -E -i 'gnome-shell|kwin|sway|weston|Xwayland|Xorg' | head -n 3 | while read line; do
     pid=$(echo "$line" | awk '{print $5}')
     if [ -n "$pid" ]; then
       coredumpctl info "$pid" >> "${OUTDIR}/coredump_details.log" 2>&1 || true
     fi
-  done
+  done; then
+    echo "Saved coredump details -> ${OUTDIR}/coredump_details.log" >> "$LOG"
+  fi
 else
   echo "coredumpctl 명령 없음" >> "$LOG"
 fi
 echo "" >> "$LOG"
 
 ###########################
-# 11) 네트워크 및 성능 관련
+# 11) 시스템 성능 및 메모리 상태
 ###########################
 note "### 11) 시스템 성능 및 메모리 상태"
 free -h > "${OUTDIR}/memory_usage.log"
@@ -314,19 +316,19 @@ echo "" >> "$LOG"
 ###########################
 note "### 13) 심각 항목 요약 생성"
 : > "$SUMMARY"
-echo "GPU 진단 요약 (Enhanced) - 생성시간: $(timestamp)" >> "$SUMMARY"
+echo "GPU 진단 요약 (Fixed Version) - 생성시간: $(timestamp)" >> "$SUMMARY"
 echo "사용자: $(whoami), 호스트: $(hostname)" >> "$SUMMARY"
 echo "세션: ${XDG_SESSION_TYPE:-unknown}, 데스크톱: ${XDG_CURRENT_DESKTOP:-unknown}" >> "$SUMMARY"
 echo "" >> "$SUMMARY"
 
 # 심각(에러/failed/oops/hang 등)
 echo "== CRITICAL matches (dmesg/journal)" >> "$SUMMARY"
-grep -iE 'error|fail|failed|panic|oops|GPU hang|gpu fault|segfault|traceback|call trace' "${OUTDIR}/dmesg_keywords.log" 2>/dev/null | head -n 50 >> "$SUMMARY" || true
-journalctl -b --no-pager | egrep -i 'amdgpu.*(error|failed|hang|fault|timeout)|GPU hang|GPU fault|kernel panic|segfault' | head -n 30 >> "$SUMMARY" 2>/dev/null || true
+grep -E -i 'error|fail|failed|panic|oops|GPU hang|gpu fault|segfault|traceback|call trace' "${OUTDIR}/dmesg_keywords.log" 2>/dev/null | head -n 50 >> "$SUMMARY" || true
+journalctl -b --no-pager | grep -E -i 'amdgpu.*(error|failed|hang|fault|timeout)|GPU hang|GPU fault|kernel panic|segfault' | head -n 30 >> "$SUMMARY" 2>/dev/null || true
 
 echo "" >> "$SUMMARY"
 echo "== WARNING matches (libinput / compositor / XWayland / firmware warnings)" >> "$SUMMARY"
-cat "${OUTDIR}/journal_keywords.log" 2>/dev/null | egrep -i 'warn|deprecated|fail|timeout' | head -n 50 >> "$SUMMARY" || true
+cat "${OUTDIR}/journal_keywords.log" 2>/dev/null | grep -E -i 'warn|deprecated|fail|timeout' | head -n 50 >> "$SUMMARY" || true
 
 echo "" >> "$SUMMARY"
 echo "== GPU/Driver Status" >> "$SUMMARY"
@@ -370,7 +372,7 @@ cat > "$REPORT" << 'EOF'
 EOF
 
 echo "<div class='header'>" >> "$REPORT"
-echo "<h1>GPU 진단 보고서</h1>" >> "$REPORT"
+echo "<h1>GPU 진단 보고서 (Fixed Version)</h1>" >> "$REPORT"
 echo "<p><strong>생성 시간:</strong> $(timestamp)</p>" >> "$REPORT"
 echo "<p><strong>시스템:</strong> $(uname -a)</p>" >> "$REPORT"
 echo "<p><strong>세션:</strong> ${XDG_SESSION_TYPE:-unknown} / ${XDG_CURRENT_DESKTOP:-unknown}</p>" >> "$REPORT"
@@ -401,14 +403,14 @@ info "HTML 보고서 생성 완료: $REPORT"
 
 # 화면에 핵심 출력
 echo ""
-echo "=== 검사 완료 (Enhanced Version) ==="
+echo "=== 검사 완료 (Fixed Version - egrep 경고 해결) ==="
 echo "로그 전체는: $OUTDIR 에 저장되었습니다."
 echo "요약 파일: $SUMMARY"
 echo "HTML 보고서: $REPORT"
 echo ""
 echo "중대한 에러(있을 경우) 상위 출력:"
 # show a few lines of summary critical part
-grep -iE 'CRITICAL:|GPU hang|GPU fault|panic|oops|segfault|amdgpu.*failed|amdgpu.*error|amdgpu.*timeout' "${OUTDIR}/dmesg_keywords.log" "${OUTDIR}/amdgpu_journal.log" "${OUTDIR}/journal_keywords.log" 2>/dev/null | head -n 20 || echo "심각한 오류가 발견되지 않았습니다."
+grep -E -i 'CRITICAL:|GPU hang|GPU fault|panic|oops|segfault|amdgpu.*failed|amdgpu.*error|amdgpu.*timeout' "${OUTDIR}/dmesg_keywords.log" "${OUTDIR}/amdgpu_journal.log" "${OUTDIR}/journal_keywords.log" 2>/dev/null | head -n 20 || echo "심각한 오류가 발견되지 않았습니다."
 
 echo ""
 echo "실행이 완료되었습니다. 생성된 파일들을 포럼이나 이슈에 첨부하면 문제 해결에 도움이 됩니다."
@@ -421,7 +423,7 @@ echo "- amdgpu firmware 관련 메시지가 있으면 사용중인 커널 버전
 echo "- HTML 보고서를 브라우저에서 열어 더 쉽게 확인 가능"
 echo ""
 echo "실시간 모니터링이 필요한 경우:"
-echo "- journalctl -f | grep -i 'amdgpu\|gpu\|hang\|error'"
+echo "- journalctl -f | grep -E -i 'amdgpu|gpu|hang|error'"
 echo "- watch -n 1 'dmesg | tail -n 20'"
 if command -v radeontop >/dev/null 2>&1; then
     echo "- radeontop (GPU 사용량 실시간 모니터링)"
